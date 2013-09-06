@@ -5,7 +5,7 @@ This folder holds the C source code for sim900 GSM/GPRS module works on RT-THREA
 The source code is suitable for EON BSP with RT-THREAD OS.
 
 Hardware platform: ARMFLY 3.0;
-CPU:  STM32F103ZE;
+Traget CPU: STM32F103ZE;
 OS kernel version: RT-THREAD 1.0.2;
 
 
