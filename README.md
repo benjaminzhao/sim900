@@ -9,7 +9,7 @@ Traget CPU: STM32F103ZE;
 OS kernel version: RT-THREAD 1.0.2;
 
 
-Stage(1):(in progress, 2013/05/30--)
+Stage(1):(in progress, 2013/05/30-- )
     basic functions for sim900 operation;
     COM read & write OPs;
     OS thread support;
