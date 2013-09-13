@@ -103,6 +103,11 @@ extern "C" {
 #define recv_ipdata_len 2
 #define recv_ipdata     3
 
+#define CML_FREE		1	//CommLineStatus free
+#define CML_BUSY		2	//CommLineStatus busy
+#define CML_ATCMD		3	//CommLineStatus AT COMMAND
+#define CML_CALL_BUSY	4	//CommLineStatus CALL Occupied
+
 //sim900 GPRS status code
 //#define IP_INITIAL          0
 //#define IP_START            1
@@ -120,6 +125,8 @@ extern "C" {
 #define SIM900_DATA_TOUT		10
 #define SIM900_TCP_CONN_TOUT	20
 
+#define SIM900_AT_RESP_MQ_POOL_SIZE	1024
+#define SIM900_AT_RESP_MQ_MSG_SIZE	16
 
 //sim900 virtual device define
 typedef struct rt_sim900_device
@@ -127,8 +134,8 @@ typedef struct rt_sim900_device
     rt_device_t device;     //phy device
 
 //    rt_uint8_t  modem_mode;   //sim900 usart op mode:non_transparent/transparent
-    rt_uint8_t  status;         //
-    rt_int8_t   signalDB;         //signal quality
+    rt_uint8_t  CommLineStatus;	//
+    rt_int8_t   signalDB;       //signal quality
     rt_uint8_t  tcpudp_autoconn;//auto connection setting
 
     rt_uint8_t* CenterPhoneNumber; //outgoing phone number[16]
@@ -160,6 +167,10 @@ typedef struct rt_sim900_device
 
     rt_mailbox_t    ATMailBox; //
     rt_uint8_t*     ATMB_pool;
+
+    rt_mq_t			AT_resp_MQ;		//msg queue for at response str
+    rt_uint8_t*		AT_resp_MQ_poll;//mem pool of the AT_resp_MQ
+
 }rt_sim900_device;
 
 //extern rt_sim900_dev*   sim900_device;//a instance

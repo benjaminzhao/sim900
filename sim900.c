@@ -35,11 +35,16 @@
 
 
 //private sem locker
-static struct rt_semaphore  sem_sim900_lock;    //lock for sim900 OP
-static struct rt_semaphore  sem_rb_lock;        //lock for rb OP
-#define rt_sim900_lock      rt_sem_take(&sem_sim900_lock,RT_WAITING_FOREVER);
-#define rt_sim900_unlock    rt_sem_release(&sem_sim900_lock);
+static struct rt_semaphore  sim900_lock;    //lock for sim900 OP
+#define SIM900_LOCK()		rt_sem_take(&sim900_lock,RT_WAITING_FOREVER)
+#define SIM900_UNLOCK()		rt_sem_release(&sim900_lock)
 
+/*ring buffer for IP DATA*/
+static  rt_uint8_t* IPdata_buff;
+static  struct rb   IPdata_rb;
+static struct rt_semaphore  rb_lock;        //lock for ipdata rb OP
+#define RINGBUFFER_LOCK()	rt_sem_take(&rb_lock,RT_WAITING_FOREVER)
+#define RINGBUFFER_UNLOCK()	rt_sem_release(&rb_lock)
 
 
 //default ip & port
@@ -53,10 +58,6 @@ static rt_uint8_t   default_connTYPE2[]     = "TCP";
 
 
 static  rt_sim900_device*   sim900;
-
-/*ring buffer for IP DATA*/
-static  rt_uint8_t* IPdata_buff;
-static  struct rb   IPdata_rb;
 
 rt_size_t rt_sim900_write(const void* buffer, rt_size_t size);
 
@@ -383,10 +384,25 @@ void ATresp_Process(rt_uint8_t* ATresp_str)
         rt_event_send(sim900->ATResp_event, RING);
         //rt_sim900_control(INCOMING_CALL);
     }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "BUSY", 4)==0)
+    {
+        rt_event_send(sim900->ATResp_event, BUSY);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO CARRIER", 10)==0)
+    {
+        rt_event_send(sim900->ATResp_event, NO_CARRIE);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO ANSWER", 9)==0)
+    {
+        rt_event_send(sim900->ATResp_event, NO_ANSWER);
+        //rt_sim900_control(INCOMING_CALL);
+    }
     else
         rt_mb_send(sim900->ATMailBox, (rt_uint32_t)&ATRes_buff[0]);
     
-    
+    rt_free_align(ATRes_buff);
 //    if(rt_strncmp( (char*)(&ATRes_buff[0]), "OK", 2)==0)
 //        send_event(sim900->device, OK);
 //    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "ERROR", 5)==0)
@@ -426,31 +442,89 @@ void ATresp_Process(rt_uint8_t* ATresp_str)
 
 }
 
-rt_uint8_t WaitATResp(const rt_uint8_t* expect_resp_str, rt_uint32_t max_tout )
+
+rt_uint8_t GetCommLineStatus(void)
 {
-    rt_uint8_t* ATRes_buff;
-    rt_uint8_t  bufSz = 64;
+	return sim900->CommLineStatus;
+}
 
-    RT_ASSERT(sim900->device != RT_NULL);
+void SetCommLineStatus(rt_uint8_t status)
+{
+	sim900->CommLineStatus = status;
+}
 
-    ATRes_buff = rt_malloc_align(bufSz, 4);
-    rt_memcpy(ATRes_buff, expect_resp_str, rt_strlen(expect_resp_str));
+//AT response are send to msg queue
+//call by rt_thread_sim900_rx_entry
+//parse "RING","CLOSED" response and send event seperately
+//return err code
+rt_err_t SendATResp(rt_uint8_t* at_resp_msg)
+{
+	rt_err_t ret;
 
-    if(rt_strncmp( (char*)(&ATRes_buff[0]), "CLOSED", 6)==0)
+	RT_ASSERT(sim900->AT_resp_MQ != RT_NULL);
+
+	if(rt_strncmp( (char*)(&at_resp_msg[0]), "CLOSED", 6)==0)
+	{//rt_sim900_control(TCPUDP_CLOSED);
+		rt_event_send(sim900->ATResp_event, CLOSED);
+
+	}
+	else if(rt_strncmp( (char*)(&at_resp_msg[0]), "RING", 4)==0)
+	{	//rt_sim900_control(INCOMING_CALL);
+		rt_event_send(sim900->ATResp_event, RING);
+	}
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "BUSY", 4)==0)
     {
-        rt_event_recv(sim900->ATResp_event, CLOSED);
-        //rt_sim900_control(TCPUDP_CLOSED);
-    }
-    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "RING", 4)==0)
-    {
-        rt_event_recv(sim900->ATResp_event, RING);
+        rt_event_send(sim900->ATResp_event, BUSY);
         //rt_sim900_control(INCOMING_CALL);
     }
-    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "OK", 2)==0)
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO CARRIER", 10)==0)
     {
-    	rt_event_recv(sim900->ATResp_event, OK);
+        rt_event_send(sim900->ATResp_event, NO_CARRIE);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO ANSWER", 9)==0)
+    {
+        rt_event_send(sim900->ATResp_event, NO_ANSWER);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+	else
+		ret = rt_mq_send(sim900->AT_resp_MQ, at_resp_msg, sizeof(at_resp_msg));
+
+	if(ret == -RT_EFULL)
+		rt_kprintf("AT response MQ is full\r\n");
+
+	return ret;
+}
+//AT response in msg queue are captured by thread call this function
+//must call by a thread
+//will block thread for max_tout
+//return
+rt_int8_t WaitATResp(rt_uint8_t* get_resp_str, rt_uint32_t max_tout )
+{
+    rt_uint8_t*	ATResp_buff;// buffer for nsg recv from MQ
+    rt_int8_t	i = 0;		// less than SIM900_AT_RESP_MQ_MSG_SIZE:32
+    rt_err_t	ret;
+
+    ATResp_buff = rt_malloc_align(SIM900_AT_RESP_MQ_MSG_SIZE, RT_ALIGN_SIZE);
+    rt_memset(ATResp_buff, 0, sizeof(ATResp_buff));
+
+    //read at response msg queue
+    RT_ASSERT(sim900->AT_resp_MQ != RT_NULL);
+    ret = rt_mq_recv(sim900->AT_resp_MQ, ATResp_buff, SIM900_AT_RESP_MQ_MSG_SIZE,  max_tout);
+
+    if( ret == RT_EOK )
+    {
+    	i = sizeof(ATResp_buff);
+    	rt_strncpy(get_resp_str, ATResp_buff, i);
+    	rt_free_align(ATResp_buff);
+    }
+    else
+    {
+    	rt_kprintf("AT response recieve failed\r\n");
+    	i = -1;
     }
 
+    return i;
 }
 
 
@@ -470,15 +544,18 @@ static void rt_thread_sim900_rx_entry(void* parameter)
     rt_uint8_t  i = 0;
     rt_uint8_t  j = 0;
     rt_uint8_t  k = 0;
-    rt_uint8_t  thischar;
+    rt_uint8_t  thischar = 0;
     rt_uint8_t  ch[5];
-    rt_uint8_t  bufSz = 64;
 
-    rt_uint8_t  recv_type;
-    rt_uint8_t  ATRes_buff[64];     //ring buffer
+    rt_uint8_t  recv_type = recv_ats;
+    rt_uint8_t* ATRes_buff;
+    rt_uint8_t  bufSz = 32;
     rt_uint16_t ip_data_len = 0;
 
+    ATRes_buff = rt_malloc_align(bufSz, RT_ALIGN_SIZE);
     rt_memset(&ATRes_buff[0], 0, bufSz);
+
+    rt_memset(&ch[0], 0, sizeof(&ch[0]));
 
     while(1)
     {
@@ -508,8 +585,9 @@ static void rt_thread_sim900_rx_entry(void* parameter)
                                 k++;
                         }
                         k=0;
-                        if(ATRes_buff[0] > 0 && ATRes_buff[0] < 128)
-                            ATresp_Process(&ATRes_buff[0]);//resolve at response and send RT event
+                        if(ATRes_buff[0] > 0 && ATRes_buff[0] < 128)//content is a ascii char
+                        	SendATResp(&ATRes_buff[0]);
+                        	//ATresp_Process(&ATRes_buff[0]);//resolve at response and send RT event
                         rt_memset(&ATRes_buff[0], 0, bufSz);
                         i = 0;
                     }
@@ -523,7 +601,8 @@ static void rt_thread_sim900_rx_entry(void* parameter)
                     }
                     else if(thischar == '>')
                     {//
-                        rt_event_send(sim900->promotion_mark, PROMOT_MARK);
+                    	SendATResp(&thischar[0]);
+                        //rt_event_send(sim900->promotion_mark, PROMOT_MARK);
                         rt_memset(&ATRes_buff[0], 0, bufSz);
                         i = 0;
                     }
@@ -550,9 +629,9 @@ static void rt_thread_sim900_rx_entry(void* parameter)
                 {   //(2)get ip data
                     if(j < ip_data_len)
                     {
-                        rt_sem_take(&sem_rb_lock,RT_WAITING_FOREVER);
+                        RINGBUFFER_LOCK();
                         rb_put(&IPdata_rb, &thischar, 1);
-                        rt_sem_release(&sem_rb_lock);
+                        RINGBUFFER_UNLOCK();
                         j++;
                     }
                     else
@@ -566,7 +645,8 @@ static void rt_thread_sim900_rx_entry(void* parameter)
                 break;
             }
         }
-    }
+    }//while
+    rt_free_align(ATRes_buff);
 }
 
 
@@ -905,18 +985,20 @@ static rt_err_t rt_sim900_init(void)
     do
     {
         rt_sim900_write(&cmd[0], rt_strlen(&cmd[0]));
-        err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_TICK_PER_SECOND);//timeout
+        err = WaitATResp("OK", RT_TICK_PER_SECOND);
+        //err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_TICK_PER_SECOND);//timeout
     }while(err != RT_EOK);
-    if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
-    {
-        rt_kprintf("echo set off\r\n");
-        return 1;//failed
-    }
-    else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-    {
-        rt_kprintf("echo set error\r\n");
-        return 0;//failed
-    }
+
+//    if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
+//    {
+//        rt_kprintf("echo set off\r\n");
+//        return 1;//failed
+//    }
+//    else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
+//    {
+//        rt_kprintf("echo set error\r\n");
+//        return 0;//failed
+//    }
     rt_memset(&cmd[0], 0, sizeof(&cmd[0]));
     rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
 
@@ -978,10 +1060,10 @@ rt_size_t rt_sim900_read(void* buffer)
     rt_sem_take(sim900->frame_sem, RT_WAITING_FOREVER);
 
     /*read all byte in ring buffer*/
-    rt_sem_take(&sem_rb_lock, RT_WAITING_FOREVER);
+    RINGBUFFER_LOCK();
     while(rb_get(&IPdata_rb, &buf[i], 1) == RT_TRUE)
         i++;
-    rt_sem_release(&sem_rb_lock);
+    RINGBUFFER_UNLOCK();
 
     /*read done*/
     read_len = i;
@@ -995,9 +1077,9 @@ rt_size_t rt_sim900_read(void* buffer)
 static rt_size_t rt_sim900_write(const void* buffer, rt_size_t size)
 {
     rt_size_t write_len;
-    rt_sem_take(&sem_sim900_lock,RT_WAITING_FOREVER);
+    SIM900_LOCK();
     write_len = rt_device_write(sim900->device, 0, buffer, size);
-    rt_sem_release(&sem_sim900_lock);
+    SIM900_UNLOCK();
     return write_len;
 }
 
@@ -1049,90 +1131,132 @@ static rt_size_t rt_sim900_DATAsend(const void* buffer, rt_size_t size)
 
 
 //拨打电话
-rt_uint8_t sim900_DailCall(void)
+//return 0 failed
+//return 1 success
+rt_uint8_t sim900_Call(rt_uint8_t* number_str)
 {
     rt_uint8_t  i=0;
     rt_uint8_t  phone_number_len = 0;
+    rt_uint8_t  number[16];
     char str[25];
     rt_uint8_t  CMDresp[8];
 
-    rt_memset(str, 0, sizeof(str));
+    rt_uint8_t	status;
 
-    RT_ASSERT(sim900->CenterPhoneNumber != RT_NULL);
-    phone_number_len = rt_strlen(sim900->CenterPhoneNumber);    
-    RT_ASSERT(phone_number_len>=8);//at least 8 digi
-    
+    /* comm line is not avaiable */
+    if( GetCommLineStatus() != CML_FREE)
+    	return 0;
+    SetCommLineStatus(CML_CALL_BUSY);//set comm line occupied
+
+    rt_memset(str, 0, sizeof(str));
+    if(number_str != RT_NULL)
+    {//use input phone number
+    	phone_number_len = rt_strlen(number_str);
+    	RT_ASSERT(phone_number_len>=8);//at least 8 digi
+    	rt_memcpy( number, number_str, phone_number_len );
+    }
+   	else
+    {//use default call center number
+    	RT_ASSERT(sim900->CenterPhoneNumber != RT_NULL);
+    	phone_number_len = rt_strlen(sim900->CenterPhoneNumber);
+    	RT_ASSERT(phone_number_len>=8);//at least 8 digi
+    	rt_memcpy( number, sim900->CenterPhoneNumber, phone_number_len );
+    }
+
+    /*number string --> number & check number validation*/
     for(i=0; i<phone_number_len; i++)
     {
-        if( (sim900->CenterPhoneNumber[i]>='0') && (sim900->CenterPhoneNumber[i]<='9') )
+        if( (number[i]>='0') && (number[i]<='9') )
         {   //phone number is valid
-            rt_kprintf("%c",sim900->CenterPhoneNumber[i]);
+            rt_kprintf("%c",number[i]);
         }
         else
         {
-            rt_kprintf("phone#%d: %c is invalid\n", i, sim900->CenterPhoneNumber[i]);
+            rt_kprintf("phone#%d: %c is invalid\n", i, number[i]);
+            SetCommLineStatus(CML_FREE);
             return 0;
         }
      }
+    rt_sprintf(str, "ATD%s;\r\n", number);
 
-    rt_sprintf(str, "ATD%s;\r\n", sim900->CenterPhoneNumber);
     /*dail number 5 times*/
     for(i=0; i<5; i++)
     {
-        rt_sim900_write(str, rt_strlen(str));
-        rt_kprintf("dailing %s; %02d\n", sim900->CenterPhoneNumber, i);
-        rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],5*RT_TICK_PER_SECOND);//timeout
+        rt_sim900_write(str, rt_strlen(str));	//SEND dial CMD
+        rt_kprintf("dailing %s; %02d\n", number, i);
+
+        //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],5*RT_TICK_PER_SECOND);//timeout
+        WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND);	//	wait for response string
+
         if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
-        {
+        {// if "OK", dail success
             rt_kprintf("dail ok\r\n");
-            return 1;//failed
+            return 1;//
         }
         else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-        {
+        {//if "error", dail failed
             rt_kprintf("dail error\r\n");
+            SetCommLineStatus(CML_FREE);
             return 0;//failed
         }
     }
+    SetCommLineStatus(CML_FREE);
+    return 0; //for exception
 }
 
 rt_uint8_t sim900_FinishCall(void)
 {
     rt_uint8_t  CMDresp[16];
-    rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],RT_WAITING_FOREVER);//timeout
+    rt_uint8_t	status = 0;
+
+    if(GetCommLineStatus() != CML_CALL_BUSY)
+    	return 0;	// not in call mode
+
+    //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],RT_WAITING_FOREVER);//timeout
+    WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND);	//	wait for response string
+
     if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
     {
         rt_kprintf("call hang up\r\n");
-        return 1;
+        status = 1;
     }
     else if(rt_strncmp( (char*)(&CMDresp[0]), "BUSY", 4) == 0)
     {
         rt_kprintf("call busy\r\n");
-        return 1;
+        status = 1;
     }
     else if(rt_strncmp( (char*)(&CMDresp[0]), "NO ANSWER", 9) == 0)
     {
         rt_kprintf("no answer\r\n");
-        return 1;
+        status = 1;
     }
     else if(rt_strncmp( (char*)(&CMDresp[0]), "NO CARRIER", 10) == 0)
     {
         rt_kprintf("call finished\r\n");
-        return 1;
+        status = 1;
     }
     else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
     {
         rt_kprintf("call finished error\r\n");
-        return 0;
+        status = ;
     }
+    SetCommLineStatus(CML_FREE);
+    return status;
 }
 
 //接电话
-rt_uint8_t sim900_AnswerCall(void)
+//return 0 failed
+//return 1 success
+rt_uint8_t sim900_PickUp(void)
 {
     rt_uint8_t  cmd[8] = "ATA\r\n";//len=5
     rt_uint8_t  CMDresp[8];
+
+    if(GetCommLineStatus != CML_FREE)
+
     rt_sim900_write(cmd, rt_strlen(cmd));
-    rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
+    //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
+    WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND);		//	wait for response string
     if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
         return 1;
     else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
@@ -1140,17 +1264,36 @@ rt_uint8_t sim900_AnswerCall(void)
 }
 
 //挂断电话
-rt_uint8_t sim900_HangUpCall(void)
+//send hangup cmd
+//response handled by finish call func
+void sim900_HangUp(void)
 {
     rt_uint8_t  cmd[8] = "ATH\r\n";//len=5
-    rt_uint8_t  CMDresp[8];
+//    rt_uint8_t  CMDresp[8];
+
     rt_sim900_write(cmd, rt_strlen(cmd));
-    rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
-    if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
-        return 1;
-    else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-        return 0;
+    //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
+//    WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND);	//	wait for response string
+//    if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
+//        return 1;
+//    else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
+//        return 0;
 }
+
+
+static void rt_thread_sim900_IncomingCal_entry(void* parameter)
+{
+	while(1)
+	{
+		if(Call_ComeIn())
+		{
+			PickUp();
+			FinishCall();
+		}
+	}
+}
+
+
 
 /********************************************
 * This function START TASK                  *
@@ -1169,6 +1312,7 @@ rt_uint8_t sim900_CSTT(rt_uint8_t* APN, rt_uint8_t* USER, rt_uint8_t* PASSWORD)
                 USER,
                 PASSWORD);
     rt_sim900_write(cmd, rt_strlen(cmd));
+
     rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
     if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
         return 1;
@@ -1319,13 +1463,14 @@ rt_uint8_t sim900_SigCheck(void)
     do
     {
         rt_sim900_write(&cmd[0], rt_strlen(&cmd[0]));
-        err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)(&CMDresp[0]), 5*RT_TICK_PER_SECOND);//timeout
+        err = rt_mq_recv(sim900->AT_resp_MQ, &CMDresp[0], sizeof(CMDresp), 5*RT_TICK_PER_SECOND);//timeout
     }while(err != RT_EOK);
+
     if(rt_strncmp( (char*)(&CMDresp[0]), "+CSQ:", 5) == 0)
     {
         sscanf( (char*)(&CMDresp[0]), "%*[^:]:%[^,]d", &SQ);//"+CSQ: 24,0"
         rt_kprintf("signal:%d\r\n", SQ);
-        err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],5* RT_TICK_PER_SECOND);//timeout
+        err = rt_mq_recv(sim900->AT_resp_MQ, &CMDresp[0], sizeof(CMDresp), 5* RT_TICK_PER_SECOND);//timeout
         if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2))
             rt_kprintf("signal read OK\r\n");
     }
@@ -1411,8 +1556,8 @@ void rt_hw_sim900_init(const char* device_name)
     rb_init(&IPdata_rb, &IPdata_buff[0], sizeof(IPdata_buff));
 
     /*init sem*/
-    RT_ASSERT( rt_sem_init(&sem_sim900_lock, "s9_lock", 1, RT_IPC_FLAG_FIFO) == RT_EOK );
-    RT_ASSERT( rt_sem_init(&sem_rb_lock, "rb_lock", 1, RT_IPC_FLAG_FIFO) == RT_EOK );
+    RT_ASSERT( rt_sem_init(&sim900_lock, "s9_lock", 1, RT_IPC_FLAG_FIFO) == RT_EOK );
+    RT_ASSERT( rt_sem_init(&rb_lock, "rb_lock", 1, RT_IPC_FLAG_FIFO) == RT_EOK );
 
     RT_ASSERT( rt_sem_init(sim900->rx_semaphore, "s9_RXsem", 0, RT_IPC_FLAG_FIFO) == RT_EOK );
     RT_ASSERT( rt_sem_init(sim900->frame_sem, "s9_Fsem", 0, RT_IPC_FLAG_FIFO) == RT_EOK );
@@ -1428,10 +1573,14 @@ void rt_hw_sim900_init(const char* device_name)
     RT_ASSERT( rt_event_init(sim900->promotion_mark, "s9_PMsem", RT_IPC_FLAG_FIFO) == RT_EOK );
 //    rt_event_init(sim900->OPreq_event, "C_REQevt", RT_IPC_FLAG_FIFO);
 
-    sim900->ATMB_pool = rt_malloc_align(128, RT_ALIGN_SIZE);
-    RT_ASSERT(sim900->ATMB_pool != RT_NULL);
-    RT_ASSERT( rt_mb_init(sim900->ATMailBox, "s9_AT_MB", sim900->ATMB_pool, size(sim900->ATMB_pool)/4, RT_IPC_FLAG_FIFO) == RT_EOK);
+    //sim900->ATMB_pool = rt_malloc_align(128, RT_ALIGN_SIZE);
+    //RT_ASSERT(sim900->ATMB_pool != RT_NULL);
+    //RT_ASSERT( rt_mb_init(sim900->ATMailBox, "s9_ATRMB", sim900->ATMB_pool, size(sim900->ATMB_pool)/4, RT_IPC_FLAG_FIFO) == RT_EOK);
 
+    //at response msg queue.
+    sim900->AT_resp_MQ_poll = rt_malloc_align(SIM900_AT_RESP_MQ_POOL_SIZE, RT_ALIGN_SIZE);
+    RT_ASSERT(sim900->AT_resp_MQ_poll != RT_NULL);
+    RT_ASSERT( rt_mq_init(sim900->AT_resp_MQ, "s9_ATRMQ", sim900->AT_resp_MQ_poll, SIM900_AT_RESP_MQ_MSG_SIZE-sizeof(void*), SIM900_AT_RESP_MQ_POOL_SIZE, RT_IPC_FLAG_FIFO) == RT_EOK );
 
 //(2)set device
     rt_sim900_set_device(device_name);
