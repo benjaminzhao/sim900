@@ -30,6 +30,7 @@ extern "C" {
 #define DO_READ_SMS             22
 //#define DO_DELETE_SMS           23
 
+
 #define DO_SIG_CHECK            31
 
 

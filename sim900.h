@@ -42,17 +42,17 @@ extern "C" {
 //#endif
 
 //defineS
-//sim900 working statsa mode
+//sim900 working status mode
 //non transparent uart process for <0x10
 //transparent uart process for >=0x10
-#define INITIAL             0x00
-#define STANDBY             0x01
-#define IN_CALL             0x02
-#define IN_SMS              0x03
-#define IN_GPRS             0x04
-#define IN_ESC              0x05
-#define IN_TCPUDP_NONTRANSP 0x09
-#define IN_TCPUDP_TRANSP    0x10
+#define INITIAL             0x00	//init
+#define STANDBY             0x01	//sim900 standby for anything, CommLineStatus is free
+#define IN_CALL             0x02	//sim900 in call mode, CommLineStauts is CALL
+#define IN_SMS              0x03	//sim900 in sms mode,
+#define IN_GPRS             0x04	//sim900 in gprs mode,
+#define IN_ESC              0x05	//sim900 in esc mode of tcp transparent, it is non transparent
+#define IN_TCPUDP_NONTRANSP 0x09	//sim900 in non-transparent tcpip mode
+#define IN_TCPUDP_TRANSP    0x10	//sim900 in transparent tcpip mode
 
 //sim900 OPs request event definition
 //must < 32
@@ -103,22 +103,9 @@ extern "C" {
 #define recv_ipdata_len 2
 #define recv_ipdata     3
 
-#define CML_FREE		1	//CommLineStatus free
-#define CML_BUSY		2	//CommLineStatus busy
-#define CML_ATCMD		3	//CommLineStatus AT COMMAND
-#define CML_CALL_BUSY	4	//CommLineStatus CALL Occupied
 
-//sim900 GPRS status code
-//#define IP_INITIAL          0
-//#define IP_START            1
-//#define IP_CONFIG           2
-//#define IP_GPRSACT          3
-//#define IP_STATUS           4
-//#define TCPUDP_CONNECTING   5
-//#define CONNECT_OK          6
-//#define TCPUDP_CLOSING      7
-//#define TCPUDP_CLOSED       8
-//#define PDP_DEACT           9
+
+
 
 #define SIM900_AT_REPONSE_SIZE  128
 #define SIM900_GSM_CONN_TOUT	5
@@ -133,7 +120,7 @@ typedef struct rt_sim900_device
 {
     rt_device_t device;     //phy device
 
-//    rt_uint8_t  modem_mode;   //sim900 usart op mode:non_transparent/transparent
+
     rt_uint8_t  CommLineStatus;	//
     rt_int8_t   signalDB;       //signal quality
     rt_uint8_t  tcpudp_autoconn;//auto connection setting
@@ -161,15 +148,10 @@ typedef struct rt_sim900_device
     rt_sem_t    calldone_sem;       //sem for call finished
     
     rt_event_t  ATResp_event;   //event of modem AT response
-//    rt_event_t  OPreq_event;        //event of user operation request for sim900 work mode
-//    rt_event_t  OPreq_response;     
     rt_event_t  promotion_mark;
 
-    rt_mailbox_t    ATMailBox; //
-    rt_uint8_t*     ATMB_pool;
-
-    rt_mq_t			AT_resp_MQ;		//msg queue for at response str
-    rt_uint8_t*		AT_resp_MQ_poll;//mem pool of the AT_resp_MQ
+    rt_mq_t		AT_resp_MQ;		//msg queue for at response str
+    rt_uint8_t*	AT_resp_MQ_poll;//mem pool of the AT_resp_MQ
 
 }rt_sim900_device;
 
@@ -193,5 +175,7 @@ void rt_hw_sim900_init(const char* device_name);
 #endif
 
 #endif
+
+
 
 

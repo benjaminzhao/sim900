@@ -135,6 +135,7 @@ void rt_hw_cellular_init(const char* device_name)
 }
 
 
+
 /****************************************
 *   rt_cellular_thread_startup          *
 *   port to specified service thread    *
