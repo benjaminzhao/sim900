@@ -291,17 +291,51 @@ void rt_thread_cellular_app_entry(void* parameter)
     }
 }
 
-//void rt_thread_cellular_ipread_entry(void* parameter)
-//{
-//
-//}
-//
-//void rt_thread_cellular_ipwrite_entry(void* parameter)
-//{
-//
-//}
+//example thread for app read ipdata
+static void rt_thread_sim900_ipdataread_entry(void* parameter)
+{
+    rt_uint8_t   buffer[1460];//maximum
+    rt_size_t    len;
+    while(1)
+    {
+        len = sim900_readDATA(&buffer[0]);
 
+        //do something with the data;
+    }
+}
+//example thread for incoming call handleing
+static void rt_thread_Celluar_IncomingCal_entry(void* parameter)
+{
+	rt_uint8_t ret = 0;
+    while(1)
+    {
+        if( sim900_Call_ComeIn() )
+        {
+        	//pickup or reject
+        	rt_celluar_control(PICKUP_CALL,RT_NULL);
+            ret = sim900_PickUp();//sim900_HangUp();
+            //notice: CommLineStatus = IN_CALL
+            if(ret == 1)
+                sim900_FinishCall();
+                rt_celluar_control(FINISHCALL,RT_NULL);
+        }
+    }
+}
 
+//example thread for out going call handleing
+static void rt_thread_Celluar_OutgoingCall_entry(void* parameter)
+{
+	rt_uint8_t ret = 0;
+    while(1)
+    {
+    	rt_celluar_control(DO_CALL,"10086");
+        ret = sim9000_call("10086");
+        //notice: CommLineStatus = IN_CALL
+        if(ret == 1)
+            sim900_FinishCall();
+            rt_celluar_control(FINISHCALL,RT_NULL);
+    }
+}
 /************************
 *   thread usb detect   *
 **

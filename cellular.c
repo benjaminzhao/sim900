@@ -40,7 +40,7 @@ rt_size_t rt_celluar_read(void* buffer)
 *   rt_cellular_write                   *
 *   port to specified device write func *
 ****************************************/
-static rt_size_t rt_cellular_write(const void* buffer, rt_size_t size)
+rt_size_t rt_cellular_write(const void* buffer, rt_size_t size)
 {
     rt_size_t   write_len = 0;
 #if (CELLULAR_TYPE == 1)
@@ -53,7 +53,7 @@ static rt_size_t rt_cellular_write(const void* buffer, rt_size_t size)
 *   rt_celluar_open                     *
 *   port to specified device open func  *
 ****************************************/
-static rt_err_t rt_celluar_open(void)
+rt_err_t rt_celluar_open(void)
 {
     rt_err_t    err;
 #if (CELLULAR_TYPE == 1)
@@ -66,7 +66,7 @@ static rt_err_t rt_celluar_open(void)
 *   rt_celluar_close                    *
 *   port to specified device close func *
 ****************************************/
-static rt_err_t rt_celluar_close(void)
+rt_err_t rt_celluar_close(void)
 {
     rt_err_t    err;
 #if (CELLULAR_TYPE == 1)
@@ -79,7 +79,7 @@ static rt_err_t rt_celluar_close(void)
 *   rt_celluar_control                  *
 * port to specified device control func *
 ****************************************/
-static rt_err_t rt_celluar_control(rt_uint8_t cmd, void *args)
+rt_err_t rt_celluar_control(rt_uint8_t cmd, void *args)
 {
     rt_err_t    err;
     #if (CELLULAR_TYPE == 1)
@@ -88,21 +88,21 @@ static rt_err_t rt_celluar_control(rt_uint8_t cmd, void *args)
     return err;
 }
 
-static rt_err_t rt_celluar_waitfor(void)
-{
-    rt_err_t    err;
-    #if (CELLULAR_TYPE == 1)
-        err = rt_sim900_waitforEvent();
-    #endif
-    return err;
-}
+//static rt_err_t rt_celluar_waitfor(void)
+//{
+//    rt_err_t    err;
+//    #if (CELLULAR_TYPE == 1)
+//        err = rt_sim900_waitforEvent();
+//    #endif
+//    return err;
+//}
 
 
 /****************************************
 *   rt_cellular_init                    *
 *   port to specified device init func  *
 ****************************************/
-static rt_err_t rt_cellular_init(void)
+rt_err_t rt_cellular_init(void)
 {
     rt_err_t    err;
 #if (CELLULAR_TYPE == 1)
@@ -123,7 +123,6 @@ static rt_err_t rt_cellular_init(void)
 ****************************************/
 void rt_hw_cellular_init(const char* device_name)
 {
-
 #if (CELLULAR_TYPE == 1)
     rt_hw_sim900_init(device_name);
 //#elif (CELLULAR_TYPE == 2)
@@ -131,10 +130,7 @@ void rt_hw_cellular_init(const char* device_name)
 //#elif (CELLULAR_TYPE == 3)
 //    rt_mc37i_device_init();
 #endif
-
 }
-
-
 
 /****************************************
 *   rt_cellular_thread_startup          *
@@ -142,7 +138,6 @@ void rt_hw_cellular_init(const char* device_name)
 ****************************************/
 void rt_cellular_thread_startup(void)
 {
-
 #if (CELLULAR_TYPE == 1)
     rt_sim900_thread_startup();
 //#elif (CELLULAR_TYPE == 2)
@@ -150,6 +145,5 @@ void rt_cellular_thread_startup(void)
 //#elif (CELLULAR_TYPE == 3)
 //    rt_mc37i_thread_startup();
 #endif
-
 }
 

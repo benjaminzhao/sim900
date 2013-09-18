@@ -167,6 +167,7 @@ void rt_sim900_thread_startup(void);
 rt_err_t rt_sim900_init(void);
 rt_err_t rt_sim900_open(void);
 rt_err_t rt_sim900_close(void);
+
 rt_size_t rt_sim900_read(void* buffer);
 rt_size_t rt_sim900_write(const void* buffer, rt_size_t size);
 

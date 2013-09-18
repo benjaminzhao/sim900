@@ -60,6 +60,10 @@ static  rt_sim900_device*   sim900;
 
 rt_size_t rt_sim900_write(const void* buffer, rt_size_t size);
 
+//<CR><LF><response><CR><LF>
+// /r  /n  response  /r /n
+// 0D  0A  response  0D 0A
+
 
 /*
  * RT-Thread modem threads Driver
@@ -346,7 +350,6 @@ void sim900_reset_entry(void* parameter)
 //        rt_thread_startup(tid);
 
     /*setup sim900 CommLine*/
-    rt_sim900_init();
 }
 
 
@@ -408,17 +411,7 @@ rt_size_t sim900_readDATA(void* buffer)
     read_len = i;
     return read_len;
 }
-//example thread for app read ipdata
-static void rt_thread_sim900_ipdataread_entry(void* parameter)
-{
-    rt_uint8_t   buffer[1460];//maximum
-    rt_size_t    len;
-    while(1)
-    {
-        len = sim900_readDATA(&buffer[0]);
-        //do something with the data;
-    }
-}
+
 
 /********************************************
 * This function send ipdata to sim900       *
@@ -461,11 +454,6 @@ rt_size_t sim900_sendDATA(const void* buffer, rt_size_t size)
     }
     return 0;
 }
-
-
-
-
-
 
 
 /****************************************
@@ -673,31 +661,7 @@ rt_uint8_t sim900_FinishCall(void)
 *   sms send and read, and gprs,tcpip   *
 *   fault handle for these ops          *
 ****************************************/
-//example thread for incoming call handleing
-static void rt_thread_sim900_IncomingCal_entry(void* parameter)
-{
-    while(1)
-    {
-        if( sim900_Call_ComeIn() )
-        {
-        	//pickup or reject
-            sim900_PickUp();//sim900_HangUp();
-            //notice: CommLineStatus = IN_CALL
-            sim900_FinishCall();
-        }
-    }
-}
 
-//example thread for out going call handleing
-static void rt_thread_sim900_OutgoingCall_entry(void* parameter)
-{
-    while(1)
-    {
-        sim9000_call("10086");
-        //notice: CommLineStatus = IN_CALL
-        sim900_FinishCall();
-    }
-}
 
 
 
@@ -1056,10 +1020,6 @@ rt_uint8_t sim900_getID_Info(void)
     return state;
 }
 
-
-
-
-
 /*RT-Thread Device Driver Interface*/
 /****************************************
 *   rt_sim900_init                      *
@@ -1068,7 +1028,7 @@ rt_uint8_t sim900_getID_Info(void)
 *   2. ip head on                       *
 *   3. read info                        *
 ****************************************/
-static rt_err_t rt_sim900_init(void)
+rt_err_t rt_sim900_init(void)
 {
     rt_uint8_t  cmd[8];
     rt_uint8_t  CMDresp[8];
@@ -1123,30 +1083,33 @@ static rt_err_t rt_sim900_init(void)
         //err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],RT_TICK_PER_SECOND);//timeout
     }while(state != 1);
 
-    //state = 0;
+    state = 0;
     //rt_memset(&cmd[0], 0, sizeof(&cmd[0]));
     //rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
-
     /*add get sim900 info funcs*/
-
+    state = sim900_getID_Info();
     return state;
 }
 
-static rt_err_t rt_sim900_open(void)
+rt_err_t rt_sim900_open(void)
 {
     return RT_EOK;
 }
 
-static rt_err_t rt_sim900_close(void)
+rt_err_t rt_sim900_close(void)
 {
     return RT_EOK;
 }
 
+rt_size_t rt_sim900_read(void* buffer)
+{
+	return RT_EOK;
+}
 /********************************************
 * This function write ATcmd to sim900       *
 * @return the byte number of sim900 sent.   *
 ********************************************/
-static rt_size_t rt_sim900_write(const void* buffer, rt_size_t size)
+rt_size_t rt_sim900_write(const void* buffer, rt_size_t size)
 {
     rt_size_t write_len;
     SIM900_LOCK();
@@ -1155,22 +1118,24 @@ static rt_size_t rt_sim900_write(const void* buffer, rt_size_t size)
     return write_len;
 }
 
-static rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
+rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
 {
-    rt_uint8_t  result;
-    rt_uint32_t sim900_cmd;
-    rt_uint8_t* ATcmd;
+    rt_uint8_t  result = 0;
+    rt_uint32_t sim900_cmd = cmd;
 
-    sim900_cmd = sim900_cmd_parse(cmd);
+    rt_uint8_t  CMD[16];//cmd string < 16 char
+
+    rt_memset(&CMD(0), 0, sizeof(&CMD[0]));
+    if(args != RT_NULL)
+        rt_strncpy((char*)&CMD[0], (char*)args, rt_strlen((char*)args));
 
     switch(sim900_cmd)
     {
-        case TCPUDP_CONN:   //do connect
+        case DO_TCPUDP_CONN:   //DO_TCPUDP_CONN
             result = sim900_ConnStart(sim900->conn_type, sim900->remote_addr, sim900->remote_port);
-            if(result == 1)
         break;
         case TCPUDP_DISCONN:
-
+        	result = sim900_ConnStop();
         break;
         case TCPUDP_CLOSED:
             //ATcmd[] = "AT+CIPSHUT\r\n";
@@ -1187,9 +1152,7 @@ static rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
             //err = rt_event_recv(sim900->OPreq_response, DONE);//wait for done
         break;
         case OUTGOING_CALL:
-            result = sim900_DailCall();//send dial call cmd
-            if(result == 1)//if dail ok, wait for call done
-                result = sim900_FinishCall();
+            result = sim900_Call();//send dial call cmd
             //return call done status
         break;
         case HANGUP_CALL:
@@ -1197,10 +1160,17 @@ static rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
         break;
         case SIG_CHECK:
             result = sim900_SigCheck();
-            sim900->signalDB = 2*result - 114;  //save SQ as -114db ~ -52db
         break;
         default:
         break;
+    }
+    if((rt_strncmp( (char*)(&CMD[0]), "", 2) == 0)
+    {
+
+    }
+    else if((rt_strncmp( (char*)(&CMD[0]), "", 2) == 0)
+    {
+
     }
     return result;
 }
@@ -1301,24 +1271,5 @@ void rt_hw_sim900_init(const char* device_name)
     //(2)set device
     rt_sim900_set_device(device_name);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
