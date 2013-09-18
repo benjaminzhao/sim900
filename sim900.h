@@ -113,7 +113,7 @@ extern "C" {
 #define SIM900_TCP_CONN_TOUT	20
 
 #define SIM900_AT_RESP_MQ_POOL_SIZE	1024
-#define SIM900_AT_RESP_MQ_MSG_SIZE	16
+#define SIM900_AT_RESP_MQ_MSG_SIZE	32
 
 //sim900 virtual device define
 typedef struct rt_sim900_device
@@ -121,8 +121,10 @@ typedef struct rt_sim900_device
     rt_device_t device;     //phy device
 
 
-    rt_uint8_t  CommLineStatus;	//
-    rt_int8_t   signalDB;       //signal quality
+    rt_uint8_t  CommLineStatus; //
+    rt_int8_t   signalDB;       //signal quality in DB:-115~-52
+    rt_uint8_t	rssi;           //rssi:0~99
+
     rt_uint8_t  tcpudp_autoconn;//auto connection setting
 
     rt_uint8_t* CenterPhoneNumber; //outgoing phone number[16]
@@ -137,10 +139,13 @@ typedef struct rt_sim900_device
     rt_uint8_t* local_port;        //local port[6]
     rt_uint8_t* remote_port;       //server port[6]
     
-    rt_uint8_t* sn;                 //serial number[16]:013227000201560 etc
-    rt_uint8_t* type;               //device type[16]:SIMCOM_SIM900 etc
-    rt_uint8_t* operator;           //celluar operator[16]:CHINA MOBILE etc
+    rt_uint8_t* id;                 //id[16]:SIM900 R11.0 etc
     rt_uint8_t* manufacturer;       //device producer[16]:SIMCOM_Ltd etc
+    rt_uint8_t* type;               //device type[16]:SIMCOM_SIM900 etc
+    rt_uint8_t* Rev;                //device revision[22]:1137B01V01SIM900M32_ST
+    rt_uint8_t* sn;                 //serial number[16]:013227000201560 etc
+    rt_uint8_t* operator;           //celluar operator[16]:CHINA MOBILE etc
+
 
     rt_sem_t    rx_semaphore;       //sem for sim900 get a char
     rt_sem_t    frame_sem;          //sem for ip data pack recieved
@@ -148,7 +153,7 @@ typedef struct rt_sim900_device
     rt_sem_t    calldone_sem;       //sem for call finished
     
     rt_event_t  ATResp_event;   //event of modem AT response
-    rt_event_t  promotion_mark;
+//    rt_event_t  promotion_mark;
 
     rt_mq_t		AT_resp_MQ;		//msg queue for at response str
     rt_uint8_t*	AT_resp_MQ_poll;//mem pool of the AT_resp_MQ
@@ -164,11 +169,12 @@ rt_err_t rt_sim900_open(void);
 rt_err_t rt_sim900_close(void);
 rt_size_t rt_sim900_read(void* buffer);
 rt_size_t rt_sim900_write(const void* buffer, rt_size_t size);
-rt_size_t rt_sim900_DATAsend(const void* buffer, rt_size_t size);
+
 rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args);
 void rt_hw_sim900_init(const char* device_name);
 
-
+rt_size_t sim900_readDATA(void* buffer);
+rt_size_t sim900_sendDATA(const void* buffer, rt_size_t size);
 
 #ifdef __cplusplus
 }
