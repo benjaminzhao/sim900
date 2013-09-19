@@ -1,0 +1,689 @@
+//
+////查询数据传输状态
+//rt_uint8_t sim900_TCPPack(void)
+//{
+//    rt_uint8_t TCPpackcmd[] = "AT+CIPACK\r\n";//len=11
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    TCPpackcmd[0],
+//                    rt_strlen(TCPpackcmd[0]) );
+//    return 1;
+//}
+//
+////设施本地端口
+//rt_uint8_t sim900_TCPSetPort(rt_uint8_t* cmd)
+//{
+//    rt_uint8_t len = rt_strlen(cmd);
+//    rt_uint8_t TCPsetportcmd[16+len+2];
+//    sprintf(TCPsetportcmd,
+//            "%s%s%s",
+//            "AT+CLPORT=\"TCP\",",
+//            cmd,
+//            "\r\n");
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    TCPsetportcmd[0],
+//                    rt_strlen(TCPsetportcmd[0]) );
+//    return 1;
+//}
+//
+////配置域名服务器
+//rt_uint8_t sim900_TCPDnsConf(rt_uint8_t* DNS)
+//{
+//    rt_uint8_t len = rt_strlen(DNS);
+//    rt_uint8_t cmd[12+len+3];
+//    sprintf(cmd,
+//            "%s%s%s\r\n",
+//            "AT+CDNSCFG=\"",//12
+//            DNS,
+//            "\"");
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+////域名解析
+//rt_uint8_t sim900_TCPDNSParse(rt_uint8_t* DOMAIN)
+//{
+//    rt_uint8_t len = rt_strlen(DOMAIN);
+//    rt_uint8_t cmd[12+len+3];
+//    sprintf(cmd,
+//            "%s%s%s\r\n",
+//            "AT+CDNSGIP=\"",//12
+//            DOMAIN,
+//            "\"");
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+////设置自动发送时间
+//rt_uint8_t sim900_TCPAutosendConf(rt_uint8_t MODE,rt_uint8_t TIME)
+//{
+//    rt_uint8_t cmd[] = "";
+//    sprintf(cmd,
+//            "%s%s,%s\r\n",
+//            "AT+CIPATS=",//13
+//            MODE,
+//            TIME);
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+////配置为服务器
+//rt_uint8_t sim900_TCPServerConf(rt_uint8_t MODE, rt_uint16_t PORT)
+//{
+//    rt_uint8_t cmd[] = "";
+//    sprintf(cmd,
+//            "%s%s,%s\r\n",
+//            "AT+CIPSERVER=",//13
+//            MODE,
+//            PORT);
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+////配置TCP/IP应用模式；透明/非透明
+//rt_uint8_t sim900_TCPModeConf(rt_uint8_t mode)
+//{
+//    rt_uint8_t cmd[] = "";
+//    sprintf(cmd,
+//            "%s%s\r\n",
+//            "AT+CIPMODE=",//11
+//            mode);
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+////配置透明传输模式
+//rt_uint8_t sim900_TCPTransConf(rt_uint8_t NmRetry, rt_uint8_t WaitTm, rt_uint16_t SendSz,rt_uint8_t esc)
+//{
+//    rt_uint8_t cmd[] = "";
+//    sprintf(cmd,
+//            "%s%s,%s,%s,$s\r\n",
+//            "AT+CIPCCFG=",//11
+//            NmRetry,
+//            WaitTm,
+//            SendSz,
+//            esc);
+//    rt_device_write(sim900_device.device,
+//                    0,
+//                    cmd[0],
+//                    rt_strlen(cmd[0]) );
+//    return 1;
+//}
+//
+//void ESC_monitor(void)
+//{
+////(1) if "CLOSED" recieved
+////(2) stop data transfer for 1000ms
+////    send "+++"
+////    idle for 500ms
+////    get "OK"
+//}
+//void IncomingCALL_monitor(void)
+//{
+////    RI_pin == LW for 120ms
+////    send incoming call event
+//}
+//
+//void IncomingSMS_monitor(void)
+//{
+////    RI_pin == LW for 50ms
+////    send incoming sms event
+//}
+
+//void EnterTransparentMode(void)
+//{
+////send ATs to config for trans mode
+////send ATs to establish GPRS TCP connection
+////get "CONNECTED"
+////switch mode=TRANSP_MODE
+//}
+//
+//void return2Trans(void)
+//{
+////send "+++" to esc
+////send "ATO"
+////get "CONNECTED"
+////switch mode=TRANSP_MODE
+//}
+//
+//void Trans2NonTrans_active(void)
+//{//closed actively
+////stop data transfer for 1000ms
+////send "+++"
+////idle for 500ms
+////get "OK"
+////switch mode=NONTRANSP_MODE
+//}
+//
+//void Trans2NonTrans_passive(void)
+//{//closed passively by remote server/client
+////wait for and get "CLOSED"
+////switch mode=NONTRANSP_MODE
+//}
+//
+//void Tran2NonTrans(void)
+//{
+////ESC monitor
+////switch mode=NONTRANSP_MODE
+//}
+//
+
+//
+////call control api CALLTYPE
+//void do_call(void)
+//{
+//    //if(INCOMING_CALL)
+//    {
+//        //answercall
+//    }
+//    //else if(OUTGOING_CALL)
+//    {
+//        //dailcall
+//    }
+//    
+//    //if(call success)
+//    //{//in talking
+//        //waiting for call finish
+//    //}
+//    //else if (failed)
+//    //{no answer/busy/no carrier
+//        //hang up
+//    //}
+//    //if(hang up)
+//    //{
+//        //sim900_HangUpCall()
+//    //}
+//    //else
+//    //{waiting for hanged by remote}
+//    
+//    //add calldone hook func
+//}
+////sms sontrol api
+//void do_sms(void)
+//{
+//    //
+//}
+//
+//void switch_toESC(void)
+//{
+//    //if(in transp mode)
+//    //idle for 1000ms
+//    //usart send "+++"
+//    //idle for 500ms
+//    //return in_esc
+//}
+//
+//void switch_fromESC(void)
+//{
+//    //if(in_esc)
+//    //usart send "ato"
+//    //waiting for "connect"
+//    //set to in transp mode
+//}
+//
+//rt_uint8_t sim900_ConnectGPRS(void)
+//{
+//}
+//void sim900_Setup(void)
+//{
+//}
+//rt_uint8_t sim900_checkcall(void)
+//{
+//}
+//netconn_write(struct netconn *conn, const void *dataptr, size_t size, u8_t apiflags);
+//netconn_read();
+
+
+
+
+rt_uint32_t sim900_cmd_parse(rt_uint8_t cellular_cmd)
+{
+    rt_uint32_t sim900_cmd;
+    switch(cellular_cmd)
+    {
+        case 1:
+            sim900_cmd = TCPUDP_CONN;
+        break;
+        case 2:
+            sim900_cmd = TCPUDP_DISCONN;
+        break;
+        case 3:
+            sim900_cmd = TCPUDP_CLOSE;
+        break;
+        case 11:
+            sim900_cmd = OUTGOING_CALL;
+        break;
+        case 12:
+            sim900_cmd = INCOMING_CALL;
+        break;
+        case 13:
+            sim900_cmd = HANGUPCALL;
+        break;
+        case 21:
+            sim900_cmd = OUTGOING_SMS;
+        break;
+        case 22:
+            sim900_cmd = INCOMING_SMS;
+        break;
+        case 31:
+            sim900_cmd = SIG_CHECK;
+        break;
+        default:
+        break;
+    }
+    return sim900_cmd;
+}
+
+
+void ATresp_Process(rt_uint8_t* ATresp_str)
+{
+    rt_uint8_t* ATRes_buff;
+    rt_uint8_t  bufSz = 64;
+    
+    RT_ASSERT(sim900->device != RT_NULL);
+
+    ATRes_buff = rt_malloc_align(bufSz, 4);
+    rt_memcpy(ATRes_buff, ATresp_str, rt_strlen(ATresp_str));
+
+    if(rt_strncmp( (char*)(&ATRes_buff[0]), "CLOSED", 6)==0)
+    {
+        rt_event_send(sim900->ATResp_event, CLOSED);
+        //rt_sim900_control(TCPUDP_CLOSED);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "RING", 4)==0)
+    {
+        rt_event_send(sim900->ATResp_event, RING);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "BUSY", 4)==0)
+    {
+        rt_event_send(sim900->ATResp_event, BUSY);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO CARRIER", 10)==0)
+    {
+        rt_event_send(sim900->ATResp_event, NO_CARRIE);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO ANSWER", 9)==0)
+    {
+        rt_event_send(sim900->ATResp_event, NO_ANSWER);
+        //rt_sim900_control(INCOMING_CALL);
+    }
+    else
+        rt_mb_send(sim900->ATMailBox, (rt_uint32_t)&ATRes_buff[0]);
+    
+    rt_free_align(ATRes_buff);
+//    if(rt_strncmp( (char*)(&ATRes_buff[0]), "OK", 2)==0)
+//        send_event(sim900->device, OK);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "ERROR", 5)==0)
+//        send_event(sim900->device, ERROR);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "CONNECT", 7)==0)
+//        send_event(sim900_device, CONNECT);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO ANSWER", 9)==0)
+//        send_event(sim900_device, NO_ANSWER);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "NO CARRIER", 10)==0)
+//        send_event(sim900_device, NO_CARRIER);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), ">", 1)==0)
+//        send_event(sim900_device, PROMOT_MARK);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "SEND OK", 7)==0)
+//        send_event(sim900_device, SEND_OK);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "SEND FAIL", 9)==0)
+//        send_event(sim900_device, SEND_FAIL);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "CLOSE OK", 8)==0)
+//        send_event(sim900_device, CLOSE_OK);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "+CPAS: 0", 8)==0)
+//        send_event(sim900_device, CALLDONE);
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "+CIPSEND:", 9)==0)
+//    {//send info
+//        rt_mq_send(&(sim900_device->msg_mq), &ATRes_buff[0], rt_strlen(&ATRes_buff[0]));
+//        send_event(sim900_device, DATA_SEND);
+//    }
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "+CME ERROR", 10)==0)
+//    {//cme error info
+//        rt_mq_send(&(sim900_device->msg_mq), &ATRes_buff[0], rt_strlen(&ATRes_buff[0]));
+//        send_event(sim900_device, CME_ERROR);
+//    }
+//    else if(rt_strncmp( (char*)(&ATRes_buff[0]), "+CSQ:", 5)==0)
+//    {//signal quality info
+//        if( (ATRes_buff[6]-0x30)*10 + (ATRes_buff[7]-0x30) < 99)
+//            rt_sem_release(&sim900_device.connect_sem);
+//        send_event(sim900_device, SIG_OK);
+//    }
+
+}
+
+
+
+
+//static void rt_thread_sim900_setup_entry(void* parameter)
+//{
+//    rt_uint16_t i = 0;
+//    rt_uint8_t  j = 1;
+//
+//    rt_uint8_t  GPRSconnected = 0;
+//    rt_uint8_t  CallInProgress = 0;
+//    rt_err_t    errstatus;
+//    rt_uint32_t e = 0;
+//
+//    if(sim900->device == RT_NULL)//if usart1 is not asigned
+//        return;
+//
+//    sim900_device->status = INITIAL;
+//    {/*INIT STATUS-->STANDBY STATUS*/
+//        rt_thread_delay( RT_TICK_PER_SECOND*10 ); //delay 10s
+//        sim900_Setup();         //setup sim900
+//        //sim900_check_signal_quality();
+//    }
+//    sim900_device->status = STANDBY;
+//
+//    while(1)
+//    {
+//        if( (sim900_device->TCPUDP_autoconn == 1)&&(sim900_device->status == STANDBY) )
+//        {
+//            rt_event_send(&(sim900_device->OPreq_event), TCPUDP_CONN);
+//        }
+////1. waiting for request of call/sms/gprs/tcp/udp
+//        rt_event_recv(  sim900_device->OPreq_event,
+//                        INCOMING_CALL|OUTGOING_CALL|SIG_CHECK|TCPUDP_CONN||TCPUDP_DISCONN|TCPUDP_CLOSED,
+//                        RT_EVENT_FLAG_OR|RT_EVENT_FLAG_CLEAR,
+//                        RT_WAITING_FOREVER, &e);
+//
+////(A). STANDBY-->IN_GPRS-->IN_TCPUDP_NONTRANSP
+//        if( (sim900_device->status == STANDBY) && ((e & TCPUDP_CONN) == TCPUDP_CONN) )
+//        {   //1.attach to GPRS   STANDBY-->IN_GPRS
+//            while(sim900_device->status != IN_GPRS)      //if gprs is not connected
+//                sim900_device->status = sim900_ConnectGPRS(); //keep trying until connect gprs
+//            rt_kprintf("gprs connected\n"); //if connect success, got "CONNECT", GPRSconnected = 1
+//            //2. tcp/ip connection IN_GPRS-->IN_TCPUDP_TRANSP
+//            if(sim900_device->status  == IN_GPRS)
+//            {//connect tcp/ip
+//                if(sim900_device->remote_addr == RT_NULL)
+//                    rt_strncpy(sim900_device->remote_addr, default_remoteIPADDR1, rt_strlen(default_remoteIPADDR1));//using default
+//                //check remote ip
+//                if(sim900_device->remote_port == RT_NULL)
+//                    rt_strncpy(sim900_device->remote_port, default_remotePORT1, rt_strlen(default_remotePORT1));//using default
+//                //check remote port
+//                if(sim900_device->conn_type == RT_NULL)
+//                    rt_strncpy(sim900_device->conn_type, default_connTYPE1, rt_strlen(default_connTYPE1));
+//                //check conn type tcp/udp
+//                rt_kprintf("connecting: 202.142.21.85:8080\n");
+//                while(sim900_device->status != IN_TCPUDP_TRANSP)
+//                  //sim900_device.status = sim900_connectTCPUDP(TCP);   //try tcp connect
+//                rt_kprintf("tcp connected\r\n");//tcp_conn new success
+//                rt_sem_release(&sim900_device->tcp_connected_sem);
+//            }
+//        }
+//
+//        /*(B). IN_TCPUDP_NONTRANSP-->STANDBY*/
+//        if( ((e & TCPUDP_CLOSED) == TCPUDP_CLOSED) && (sim900_device->status == IN_TCPUDP_TRANSP) )
+//        {   //this event comes from USART "CLOSED" in transparent mode
+//            //TCP/UDP CONNECTION HAS BEEN CLOSED BY REMOTE
+//            sim900_device->status = STANDBY; //sim900 switch t non-transparent mode automatically
+//            rt_event_send(&(sim900_device->OPreq_response), TCPUDP_CLOSED);
+//        }
+//        if((e & TCPUDP_DISCONN) == TCPUDP_DISCONN)
+//        {//dis connect tcp/udp by app
+//            if(sim900_device->status == IN_TCPUDP_TRANSP)
+//            {//go to esc mode
+//            
+//            }
+//            //do disconn
+//            sim900_device->status = STANDBY;
+//            rt_event_send(&(sim900_device->OPreq_response), TCPUDP_DISCONN);
+//        }
+//
+//        /*(C). STANDBY/IN_TCPUDP_TRANSP-->IN_CALL*/
+//        if( (e & (INCOMING_CALL | OUTGOING_CALL) )> 0)
+//        {
+//            if(sim900_device->status == STANDBY)
+//            {//do call
+//            }
+//            else if(sim900_device->status == IN_TCPUDP_TRANSP)
+//            {//go to esc mode
+//            //do call
+//            //return from esc mode
+//            }
+//        }
+//
+//        /*(D). STANDBY/IN_TCPUDP_TRANSP-->SMS*/
+//        if( ( e & (INCOMING_SMS| OUTGOING_SMS) ) > 0)
+//        {
+//            if(sim900_device->status == STANDBY)
+//            {//do SMS
+//            }
+//            else if(sim900_device->status == IN_TCPUDP_TRANSP)
+//            {//go to ecs mode
+//            //do SMS
+//            //return from esc mode
+//            }
+//        }
+//
+//        /*(E). STANDBY/IN_TCPUDP_TRANSP-->SIG_CHECK*/
+//        if((e & SIG_CHECK) == SIG_CHECK)
+//        {
+//            if(sim900_device->status == STANDBY)
+//            {//do SIG CHECK
+//            }
+//            else if(sim900_device->status == IN_TCPUDP_TRANSP)
+//            {//go to ecs mode
+//            //do SIG CHECK
+//            //return from esc mode
+//            }
+//        }
+//        
+//        
+//        
+////4. if tcp/udp terminated by remote server, do reconnect
+//        if( ( e & (TCPUDP_CLOSED) > 0)&&(sim900_device->status == IN_TCPUDP_TRANSP) )
+//        {
+//        }
+////5. tcp/udp is not closed remotely
+//        else
+//        {//tcp/udp discconnect first
+//            if(sim900_device->status == IN_TCPUDP_TRANSP)
+//            {
+//                //do esc procedure
+//                sim900_device->status = IN_ESC;//set esc mode
+//                rt_kprintf("switch to AT mode\n");
+//            }
+//            if(e & (INCOMING_CALL | OUTGOING_CALL)> 0)
+//            {//do call
+//                if( sim900_DailCall() == 1)
+//                     CallInProgress = 1;
+//                else
+//                    rt_kprintf("dail failed\n");
+//                while(CallInProgress == 1)//check call in progress
+//                {
+//                    CallInProgress = sim900_checkcall();
+//                    rt_thread_delay(10000);
+//                }
+//                rt_sem_release(&(sim900_device->calldone_sem));//if call finished
+//                rt_kprintf("call finished\n");
+//            }
+//            if( e & (INCOMING_SMS| OUTGOING_SMS) > 0)
+//            {//turn to do sms
+//            }
+//            if( (e & SIG_CHECK) == SIG_CHECK)
+//            {//  DO SIG_CHECK
+//            }
+//            if(sim900_device->status == IN_ESC)
+//            {
+//                //return to tcp conn:"ATO"
+//                //sim900_device.status == IN_TCPUDP_NONTRANSP;
+//            }
+////                if( e & (TCP_DISCONN | UDP_DISCONN) > 0)
+////                {//  do disconn
+////                    sim900_sim900_disconnectTCPUDP();
+////                    sim900_device.status ==STANDBY;
+////                    rt_kprintf("tcp connection closed\n");
+////                }
+//
+//        }
+////7. switch sim900 to modem mode
+//        
+//
+//    }
+//
+//}
+
+
+
+rt_int8_t getCCI(rt_uint8_t* cci)
+{
+	;
+}
+
+rt_int8_t getIMEI(rt_uint8_t* imei)
+{
+
+}
+
+
+rt_int8_t sendSMS(const rt_uint8_t* to, const rt_uint8_t* msg)
+{
+
+}
+
+rt_int8_t readSMS(rt_uint8_t* msg, rt_uint8_t msg_len, rt_uint8_t* number, rt_uint32_t nlen)
+{
+
+}
+
+
+rt_int8_t readCall(rt_uint8_t* number, rt_int8_t len)
+{
+
+}
+
+rt_int8_t Call(rt_uint8_t* number, rt_uint32_t milliseconds)
+{
+
+}
+
+rt_uint8_t force(void)
+{
+
+}
+
+rt_int32_t read(rt_uint8_t result, rt_int32_t len)
+{
+
+}
+
+rt_int32_t readCellData(rt_uint8_t result, rt_int32_t len)
+{
+
+}
+
+rt_int32_t SimpleRead(void)
+{
+
+}
+
+rt_int32_t WhileSimpleRead(void)
+{
+
+}
+
+void SimpleWrite(rt_uint8_t* comm)
+{
+
+}
+
+void SimpleWriteln(rt_uint8_t* comm)
+{
+
+}
+
+//private
+
+rt_uint8_t configandwait(rt_uint8_t* pin)
+{
+
+}
+
+rt_uint8_t setPIN(rt_uint8_t* pin)
+{
+
+}
+
+rt_uint8_t changeNSIPmode(rt_uint8_t* pin)
+{
+
+}
+
+
+//    rt_mailbox_t    ATMailBox; //
+//    rt_uint8_t*     ATMB_pool;
+
+//    rt_event_t  OPreq_event;        //event of user operation request for sim900 work mode
+//    rt_event_t  OPreq_response;     
+
+//    rt_uint8_t  modem_mode;   //sim900 usart op mode:non_transparent/transparent
+
+
+
+//sim900 GPRS status code
+//#define IP_INITIAL          0
+//#define IP_START            1
+//#define IP_CONFIG           2
+//#define IP_GPRSACT          3
+//#define IP_STATUS           4
+//#define TCPUDP_CONNECTING   5
+//#define CONNECT_OK          6
+//#define TCPUDP_CLOSING      7
+//#define TCPUDP_CLOSED       8
+//#define PDP_DEACT           9
+
+
+//    rt_event_t  promotion_mark;
+
+
+//    rt_sem_init(&(sim900->ok_sem), "s9_ok_sem", 0, RT_IPC_FLAG_FIFO);
+//    rt_sem_init(&(sim900->err_sem), "s9_err_sem", 0, RT_IPC_FLAG_FIFO);
+//    rt_sem_init(&(sim900->ring_sem), "s9_ring_sem", 0, RT_IPC_FLAG_FIFO);
+//    rt_sem_init(&(sim900->connect_sem), "s9_cnnt_sem", 0, RT_IPC_FLAG_FIFO);
+//    rt_sem_init(sim900->tcp_connected_sem, "C_CONNsem", 0, RT_IPC_FLAG_FIFO);
+//    rt_sem_init(sim900->calldone_sem, "C_CALsem", 0, RT_IPC_FLAG_FIFO);
+    
+RT_ASSERT( rt_event_init(sim900->promotion_mark, "s9_PMsem", RT_IPC_FLAG_FIFO) == RT_EOK );
+
+//    rt_event_init(sim900->OPreq_event, "C_REQevt", RT_IPC_FLAG_FIFO);
+
+    //sim900->ATMB_pool = rt_malloc_align(128, RT_ALIGN_SIZE);
+    //RT_ASSERT(sim900->ATMB_pool != RT_NULL);
+    //RT_ASSERT( rt_mb_init(sim900->ATMailBox, "s9_ATRMB", sim900->ATMB_pool, size(sim900->ATMB_pool)/4, RT_IPC_FLAG_FIFO) == RT_EOK);
+
+
+
+
+//sim900 OPs request event definition
+//must < 32
+//#define GPRS_CONN       (1<<0)  //  gprs dail up
+//#define TCPUDP_CONN     (1<<1)  //  tcp/ip connection
+//#define TCPUDP_DISCONN  (1<<2)  //  TCP/UDP dis-connect
+//#define TCPUDP_CLOSE    (1<<3)  //  TCO/UDP CLOSE
+//#define TCPUDP_CLOSED   (1<<4)  //  TCP/UDP CLOSED BY REMOTE
+//#define INCOMING_CALL   (1<<5)  //  switch to call
+//#define OUTGOING_CALL   (1<<6)  //  switch to call
+//#define HANGUP_CALL     (1<<7)  //  hang up call
+//#define INCOMING_SMS    (1<<8)  //  switch to sms
+//#define OUTGOING_SMS    (1<<9)  //  switch to sms
+//#define SIG_CHECK       (1<<10) //  signal quality check
