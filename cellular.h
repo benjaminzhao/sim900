@@ -18,13 +18,20 @@ extern "C" {
 #endif
 
 /*define celluar control cmd (0-255)*/
-#define TCPUDP_CONN     1
-#define TCPUDP_DISCONN  2
-#define TCPUDP_CLOSED   3
+#define TCPUDP_CONN             1
+#define TCPUDP_DISCONN          2
+#define TCPUDP_CLOSE            3
+#define WAITFOR_CONN_CLOSED     4
+#define TCPUDP_SET_CONN_TYPE    5
+#define TCPUDP_AUTO_CONN        6
+#define TCPUDP_REMOTE_IP        7
+#define TCPUDP_REMOTE_PORT      8
 
 #define DO_CALL         11
 #define PICKUP_CALL     12
 #define HANGUP_CALL     13
+#define FINISH_CALL     14
+#define WAITFOR_IN_CALL 15
 
 #define SNED_SMS        21
 #define READ_SMS        22
@@ -37,8 +44,13 @@ extern "C" {
 rt_err_t rt_celluar_control(rt_uint8_t cmd, void *args);
 
 rt_err_t rt_cellular_init(void);
-void rt_hw_cellular_init(const char* device_name);
+rt_cellular_device* rt_hw_cellular_init(const char* device_name);
 void rt_cellular_thread_startup(void);
+
+typedef struct rt_cellular_device
+{
+	void* device;
+}rt_cellular_device;
 
 #ifdef __cplusplus
 }

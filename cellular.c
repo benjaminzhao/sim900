@@ -23,15 +23,17 @@
 #endif
 
 
+
 /****************************************
 *   rt_celluar_read                     *
 *   port to specified device read func  *
+*   celluar read ip data                *
 ****************************************/
 rt_size_t rt_celluar_read(void* buffer)
 {
     rt_size_t read_len = 0;
 #if (CELLULAR_TYPE == 1)
-    read_len = rt_sim900_read(buffer);
+    read_len = sim900_readDATA(buffer);
 #endif
     return read_len;
 }
@@ -39,12 +41,13 @@ rt_size_t rt_celluar_read(void* buffer)
 /****************************************
 *   rt_cellular_write                   *
 *   port to specified device write func *
+*   celluar send ip data                *
 ****************************************/
 rt_size_t rt_cellular_write(const void* buffer, rt_size_t size)
 {
     rt_size_t   write_len = 0;
 #if (CELLULAR_TYPE == 1)
-    write_len = rt_sim900_write(buffer, size);
+    write_len = sim900_sendDATA(buffer, size);
 #endif
     return write_len;
 }
@@ -121,15 +124,17 @@ rt_err_t rt_cellular_init(void)
 *   rt_hw_cellular_init                 *
 * port to specified device hw int func  *
 ****************************************/
-void rt_hw_cellular_init(const char* device_name)
+rt_cellular_device* rt_hw_cellular_init(const char* device_name)
 {
 #if (CELLULAR_TYPE == 1)
-    rt_hw_sim900_init(device_name);
+	rt_cellular_device* cellular;//celluar device
+	cellular->device = rt_hw_sim900_init(device_name);
 //#elif (CELLULAR_TYPE == 2)
 //    rt_mg323_init();
 //#elif (CELLULAR_TYPE == 3)
 //    rt_mc37i_device_init();
 #endif
+	return cellular;
 }
 
 /****************************************
