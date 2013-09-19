@@ -60,8 +60,6 @@ extern void workbench_init(void);
 struct  rt_thread   thread_usb;
 void rt_thread_cellular_app_entry(void* parameter);
 
-rt_cellular_device* cellular;
-
 
 /************************
 *   init thread         *
@@ -189,8 +187,8 @@ void rt_init_thread_entry(void *parameter)
     /*config GPS IO*/
     rt_gps_set_device(GPS_DEVICE);
 
-/*init celluar and startup*/
-    cellular = rt_hw_cellular_init(CELLULAR_DEVICE);
+/*init cellular and startup*/
+    rt_hw_cellular_init(CELLULAR_DEVICE);
     rt_cellular_thread_startup();
     
     tid= rt_thread_create(  "cell_app",
@@ -277,8 +275,61 @@ void rt_init_thread_entry(void *parameter)
 //}
 
 
+
+
+//example thread for app read ipdata
+static void rt_thread_cellular_IPdataRead_entry(void* parameter)
+{
+    rt_uint8_t   buffer[1460];//maximum
+    rt_size_t    len;
+    while(1)
+    {
+        rt_memset(&buffer[0], 0, sizeof(&buffer[0]));
+        len = rt_cellular_read(&buffer[0]);//block, wait and read a frame data
+        //do something with the data;
+    }
+}
+
+//example thread for incoming call handleing
+static void rt_thread_Cellular_IncomingCal_entry(void* parameter)
+{
+    while(1)
+    {
+        if( rt_cellular_control(WAITFOR_IN_CALL,RT_NULL) == RT_EOK)//sim900_Call_ComeIn()
+        {   //pickup:PICKUP_CALL or reject:HANGUP_CALL
+            if(rt_cellular_control(PICKUP_CALL, RT_NULL) == RT_EOK)
+                rt_cellular_control(FINISH_CALL, RT_NULL);//notice: CommLineStatus = IN_CALL
+        }
+        else
+            rt_kprintf("in coming call error!\r\n");
+    }
+}
+//example thread to monitor tcp/udp connection closed by server
+static void rt_thread_Cellular_IPclosed_entry(void* parameter)
+{
+    rt_uint8_t temp;
+    while(1)
+    {//monitor if TCP UDP CONNECTION closed by server
+        if (rt_cellular_control(WAITFOR_CONN_CLOSED, RT_NULL) == RT_EOK)
+        {
+            rt_kprintf("Server Closed TCP/UDP connection!\r\n");
+            temp = 1;
+            rt_cellular_control(TCPUDP_AUTO_CONN, &temp);
+            rt_cellular_control(QUERY_AUTO_CONN, &temp);
+            if(temp == 1)
+            {
+                //DO CONNECTION
+                if( rt_cellular_control(READYtoCONN, RT_NULL) == RT_EOK )
+                    rt_cellular_control(TCPUDP_CONN, RT_NULL);
+                else
+                    rt_thread_delay(5*RT_TICK_PER_SECOND);
+            }
+        }
+    }
+}
+
 /****************************************
-*   rt_thread_celluar_app_entry         *
+*   rt_thread_cellular_app_entry         *
 *   a thread for app of sim900          *
 *   a serial operation to sim900        *
 *   recieve event from other thread     *
@@ -295,6 +346,11 @@ void rt_thread_cellular_app_entry(void* parameter)
 
     //do gprs & tcp connection
 
+    if(rt_cellular_control(READYtoCONN, RT_NULL) != RT_EOK)
+    {
+        rt_kprintf("not ready for tcp/udp conn\r\n");
+    }
+
     tid = rt_thread_create( "inipdata",
                             rt_thread_cellular_IPdataRead_entry,
                             RT_NULL,
@@ -307,68 +363,30 @@ void rt_thread_cellular_app_entry(void* parameter)
                             512, 5, 50);
     rt_thread_startup(tid);
 
-    //rt_celluar_control(TCPUDP_SET_CONN_TYPE, "TCP");
-    //rt_celluar_control(TCPUDP_REMOTE_IP, "202.112.81.53");
-    //rt_celluar_control(TCPUDP_REMOTE_PORT, "8080");
+    tid = rt_thread_create( "inclose",
+                            rt_thread_Cellular_IPclosed_entry,
+                            RT_NULL,
+                            512, 5, 50);
+    rt_thread_startup(tid);
+    
+    //rt_cellular_control(TCPUDP_SET_CONN_TYPE, "TCP");
+    //rt_cellular_control(TCPUDP_REMOTE_IP, "202.112.81.53");
+    //rt_cellular_control(TCPUDP_REMOTE_PORT, "8080");
 
     while(1)
     {
         //do somthing
         //example thread for out going call
-        if(rt_celluar_control(DO_CALL,"10086") == RT_EOK)
-            rt_celluar_control(FINISHCALL,RT_NULL);
+        if(rt_cellular_control(DO_CALL,"10086") == RT_EOK)
+            rt_cellular_control(FINISH_CALL, RT_NULL);
         rt_thread_delay(10*RT_TICK_PER_SECOND);
 
         //example of read gsm signal quality
-        if(rt_celluar_control(DO_SIG_CHECK, &rssi) == RT_EOK)
+        if(rt_cellular_control(DO_SIG_CHECK, &rssi) == RT_EOK)
         {
             rt_kprintf("signal quality: %d", rssi);
         }
         rt_thread_delay(10*RT_TICK_PER_SECOND);
-    }
-}
-
-//example thread for app read ipdata
-static void rt_thread_cellular_IPdataRead_entry(void* parameter)
-{
-    rt_uint8_t   buffer[1460];//maximum
-    rt_size_t    len;
-    while(1)
-    {
-        rt_memset(&buffer[0], 0, sizeof(&buffer[0]));
-        len = sim900_readDATA(&buffer[0]);//block, wait and read a frame data
-        //do something with the data;
-    }
-}
-
-//example thread for incoming call handleing
-static void rt_thread_Cellular_IncomingCal_entry(void* parameter)
-{
-    while(1)
-    {
-        if( rt_celluar_control(WAITFOR_IN_CALL,RT_NULL) == RT_EOK)//sim900_Call_ComeIn()
-        {   //pickup:PICKUP_CALL or reject:HANGUP_CALL
-            if(rt_celluar_control(PICKUP_CALL, RT_NULL) == RT_EOK)
-                rt_celluar_control(FINISH_CALL, RT_NULL);//notice: CommLineStatus = IN_CALL
-        }
-        else
-        	rt_kprintf("in coming call error!\r\n");
-    }
-}
-//example thread to monitor tcp/udp connection closed by server
-static void rt_thread_Cellular_IPclosed_entry(void* parameter)
-{
-    while(1)
-    {//monitor if TCP UDP CONNECTION closed by server
-        if (rt_cellular_control(WAITFOR_CONN_CLOSED, RT_NULL) == RT_EOK)
-        {
-            rt_kprintf("Server Closed TCP/UDP connection!\r\n");
-            rt_cellular_control(TCPUDP_AUTO_CONN, 1)
-            if(cellular->device->tcpudp_autoconn == 1)
-            {
-                //DO CONNECTION
-            }
-        }
     }
 }
 

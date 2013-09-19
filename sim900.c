@@ -60,7 +60,7 @@ static rt_uint8_t   default_PhoneNumber[]   = "13512341234";
 static  rt_sim900_device*   sim900;
 
 rt_size_t rt_sim900_write(const void* buffer, rt_size_t size);
-
+void sim900_set_attribute(rt_uint8_t* attribute, rt_uint8_t* content);
 //<CR><LF><response><CR><LF>
 // /r  /n  response  /r /n
 // 0D  0A  response  0D 0A
@@ -145,7 +145,7 @@ rt_int8_t WaitATResp(rt_uint8_t* get_resp_str, rt_uint32_t max_tout )
 
     if( ret == RT_EOK )
     {
-        i = rt_strlen(ATResp_buff);//get string length
+        i = rt_strlen((char*)ATResp_buff);//get string length
         rt_strncpy((char*)get_resp_str, (char*)ATResp_buff, i);
         //rt_free_align(ATResp_buff);
     }
@@ -551,8 +551,7 @@ rt_err_t sim900_Call(rt_uint8_t* number_str)
 rt_err_t sim900_Call_ComeIn(void)
 {
     rt_uint32_t e = 0;
-    rt_uint8_t  state;
-    rt_err_t    err;
+    rt_err_t    err = RT_ERROR;
     //block and waiting for in coming call event
     err = rt_event_recv(sim900->ATResp_event,
                         RING,
@@ -566,6 +565,7 @@ rt_err_t sim900_Call_ComeIn(void)
 rt_err_t sim900_PickUp(void)
 {
     rt_uint8_t  cmd[8] = "ATA\r\n";//len=5
+    rt_err_t    err;
     rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
 
     if(GetCommLineStatus() == IN_CALL)//if already in call
@@ -577,10 +577,11 @@ rt_err_t sim900_PickUp(void)
     if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
     {
         SetCommLineStatus(IN_CALL);
-        return RT_EOK;
+        err = RT_EOK;
     }
     else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-        return RT_ERROR;
+        err = RT_ERROR;
+    return err;
 }
 
 //hang up call op
@@ -646,12 +647,45 @@ rt_err_t sim900_FinishCall(void)
     return status;
 }
 
+//test and set registration gsm
+//return RT_EOK = registed
+rt_err_t sim900_RegGSM(void)
+{
+    rt_uint8_t  cmd[32];//len=10
+    rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
+    rt_err_t	err = RT_ERROR;
+
+    rt_memset(&cmd[0], 0, sizeof(&cmd[0]));
+    rt_sprintf((char*)&cmd[0], "AT+CREG?\r\n");
+    rt_sim900_write(cmd, rt_strlen((char*)&cmd[0]));
+
+    rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
+    if(WaitATResp(&CMDresp[0],RT_WAITING_FOREVER) > 0)
+    {
+        if(rt_strncmp( (char*)(&CMDresp[0]), "+CREG:", 5) == 0)
+        {
+            rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
+            if(WaitATResp(&CMDresp[0],RT_WAITING_FOREVER) > 0)
+            {
+                if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
+                    err = RT_EOK;
+            }
+        }
+        else if(rt_strncmp( (char*)(&CMDresp[0]), "+CME ERROR:", 11) == 0)
+            err = RT_ERROR;
+    }
+    return err;
+}
+
+
+//test and set attach gprs cmd
+//return RT_EOK = attached
 rt_err_t sim900_AttachGPRS(void)
 {
     rt_uint8_t  cmd[32];//len=10
     rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
     rt_uint8_t  state = 0;
-    rt_err_t	err = RT_ERROR;
+    rt_err_t    err = RT_ERROR;
 
     rt_memset(&cmd[0], 0, sizeof(&cmd[0]));
     rt_sprintf((char*)&cmd[0], "AT+CGATT?\r\n");
@@ -744,13 +778,13 @@ rt_err_t sim900_CSTT(rt_uint8_t* APN, rt_uint8_t* USER, rt_uint8_t* PASSWORD)
 /********************************************
 * This function bring up gprs               *
 *                                           *
-* @return the byte number of sim900 sent.   *
+* @return RT_EOK = success.                 *
 ********************************************/
-rt_uint8_t sim900_CIICR(void)
+rt_err_t sim900_CIICR(void)
 {
     rt_uint8_t  cmd[16] = "AT+CIICR\r\n";//len=10
     rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
-    rt_uint8_t	state = 0;
+    rt_err_t	state = RT_ERROR;
 
     rt_sim900_write(cmd, rt_strlen((char*)&cmd[0]));
     //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
@@ -758,9 +792,9 @@ rt_uint8_t sim900_CIICR(void)
     if(WaitATResp(&CMDresp[0],RT_WAITING_FOREVER) > 0)
     {
         if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
-            state = 1;
+            state = RT_EOK;
         else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-            state = 0;
+            state = RT_ERROR;
     }
     return state;
 }
@@ -768,23 +802,25 @@ rt_uint8_t sim900_CIICR(void)
 /********************************************
 * This function get local ip addr           *
 *                                           *
-* @return the byte number of sim900 sent.   *
+* @return RT_EOK = success.                 *
 ********************************************/
-rt_uint8_t sim900_CIFSR(void)
+rt_err_t sim900_CIFSR(void)
 {
     rt_uint8_t  cmd[16] = "AT+CIFSR\r\n";//len=10
     rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
-    rt_uint8_t	state = 0;
+    rt_err_t	state = RT_ERROR;
 
     rt_sim900_write(cmd, rt_strlen((char*)&cmd[0]));
-    //rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0], RT_WAITING_FOREVER);//timeout
     rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
     if(WaitATResp(&CMDresp[0],RT_WAITING_FOREVER) > 0)
     {
-        if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
-            state = 1;
-        else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
-            state = 0;
+        if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
+            state = RT_ERROR;
+        else if(CMDresp[0] >= '0' || CMDresp[0] <= '9')
+        {
+            state = RT_EOK;
+            sim900_set_attribute(sim900->local_addr, &CMDresp[0]);
+        }
     }
     return state;
 }
@@ -796,10 +832,28 @@ rt_uint8_t sim900_CIFSR(void)
 ********************************************/
 rt_uint8_t sim900_CIPStatus(void)
 {
-    rt_uint8_t cmd[32] = "AT+CIPSTATUS\r\n";
+    rt_uint8_t  cmd[32] = "AT+CIPSTATUS\r\n";
+    rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
+    rt_err_t    err = RT_ERROR;
+
     rt_sim900_write(cmd, rt_strlen((char*)&cmd[0]));
-    
-    return 1;
+    rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
+    if(WaitATResp(&CMDresp[0], 10*RT_TICK_PER_SECOND) > 0)
+    {
+        if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
+        {
+            rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
+            if(WaitATResp(&CMDresp[0], 10*RT_TICK_PER_SECOND) > 0)
+            {
+                if(rt_strncmp( (char*)(&CMDresp[0]), "STATE:", 6) == 0)
+                    err = RT_EOK;
+            }
+        }
+        else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
+            err = RT_ERROR;
+    }
+    return err;
+
 }
 
 /********************************************
@@ -813,6 +867,7 @@ rt_err_t sim900_ConnStart(rt_uint8_t* TYPE, rt_uint8_t* IP, rt_uint8_t* PORT)
     rt_uint8_t  CMDresp[SIM900_AT_RESP_MQ_MSG_SIZE];
     rt_err_t    state = RT_ERROR;
     rt_uint8_t  i;
+
     rt_sprintf( (char*)cmd[0],
                 "%s\"%s\",\"%s\",\"%s\"\r\n,"
                 "AT+CIPSTART=",
@@ -851,7 +906,7 @@ rt_err_t sim900_ConnStart(rt_uint8_t* TYPE, rt_uint8_t* IP, rt_uint8_t* PORT)
                         {
                             if(rt_strncmp( (char*)(&CMDresp[0]), "CONNECT FAIL", 12) == 0)
                                 rt_kprintf("sim900_ConnStart: CONNECT FAIL\r\n");
-                            return 0;
+                            return RT_ERROR;
                         }
                     }
                 }
@@ -882,9 +937,9 @@ rt_err_t sim900_CIPCLOSE(void)
     rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
     if(WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND) > 0)
     {
-        if((rt_strncmp( (char*)(&CMDresp[0]), "CLOSE OK", 8) == 0)
+        if( rt_strncmp( (char*)(&CMDresp[0]), "CLOSE OK", 8) == 0 )
             err = RT_EOK;
-        else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
+        else if( rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0 )
             err = RT_ERROR;
     }
     return err;
@@ -905,13 +960,12 @@ rt_uint8_t sim900_CIPSHUT(void)
     rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
     if(WaitATResp(&CMDresp[0], 5*RT_TICK_PER_SECOND) > 0)
     {
-        if((rt_strncmp( (char*)(&CMDresp[0]), "SHUT OK", 7) == 0)
+        if(rt_strncmp( (char*)(&CMDresp[0]), "SHUT OK", 7) == 0)
             err = RT_EOK;
         else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
             err = RT_ERROR;
     }
     return err;
-}
 }
 
 //simple function to transfer rssi 2 signal DB number
@@ -959,7 +1013,7 @@ rt_err_t sim900_SigCheck(void)
             {
                 sscanf( (char*)(&CMDresp[0]), "%*[^:]:%[^,]d", &SQ);//etc:"+CSQ: 24,0"
                 rt_kprintf("signal:%d\r\n", SQ);
-                sim900->rssi = SQ;//SQ:0--99
+                sim900->rssi = SQ;  //SQ:0--99
                 sim900->signalDB = rssi2db(SQ);
                 rt_memset(&CMDresp[0], 0, sizeof(&CMDresp[0]));
                 //err = rt_mq_recv(sim900->AT_resp_MQ, &CMDresp[0], sizeof(CMDresp), 5* RT_TICK_PER_SECOND);//timeout
@@ -1082,6 +1136,20 @@ rt_err_t sim900_getID_Info(void)
     return state;
 }
 
+//simple function for set sim900 device attributes
+void sim900_set_attribute(rt_uint8_t* attribute, rt_uint8_t* content)
+{
+    rt_uint8_t  len = 0;
+    /*set default connection type: tcp/udp*/
+    if(attribute != RT_NULL)
+        rt_free_align( (char*)attribute );
+    len = rt_strlen((char*)content);
+    attribute = rt_malloc_align(len, RT_ALIGN_SIZE);
+    rt_strncpy( (char*)attribute, (char*)content, len );
+
+}
+
+
 /*RT-Thread Device Driver Interface*/
 /****************************************
 *   rt_sim900_init                      *
@@ -1095,35 +1163,18 @@ rt_err_t rt_sim900_init(void)
     rt_uint8_t  cmd[8];
     rt_uint8_t  CMDresp[8];
     rt_err_t	state = RT_ERROR;
-    rt_uint8_t  len = 0;
 
     /*set default connection type: tcp/udp*/
-    if(sim900->conn_type != RT_NULL)
-        rt_free_align((char*)sim900->conn_type);
-    len = rt_strlen((char*)&default_connTYPE1[0]);
-    sim900->conn_type = rt_malloc_align(len, RT_ALIGN_SIZE);
-    rt_strncpy((char*)sim900->conn_type, (char*)&default_connTYPE1[0], len);
+    sim900_set_attribute(sim900->conn_type, &default_connTYPE1[0]);
 
     /*set default remote ip addr*/
-    if(sim900->remote_addr != RT_NULL)
-        rt_free_align((char*)sim900->remote_addr);
-    len = rt_strlen((char*)&default_remoteIPADDR1[0]);
-    sim900->remote_addr = rt_malloc_align(len, RT_ALIGN_SIZE);
-    rt_strncpy((char*)sim900->remote_addr, (char*)&default_remoteIPADDR1[0], len);
+    sim900_set_attribute(sim900->remote_addr, &default_remoteIPADDR1[0]);
 
     /*set default remote port*/
-    if(sim900->remote_port != RT_NULL)
-        rt_free_align((char*)sim900->remote_port);
-    len = rt_strlen((char*)&default_remotePORT1[0]);
-    sim900->remote_port = rt_malloc_align(len, RT_ALIGN_SIZE);
-    rt_strncpy((char*)sim900->remote_port, (char*)&default_remotePORT1[0], len);
+    sim900_set_attribute(sim900->remote_port, &default_remotePORT1[0]);
 
     /*set default outgoing phone number*/
-    if(sim900->CenterPhoneNumber != RT_NULL)
-        rt_free_align((char*)sim900->CenterPhoneNumber);
-    len = rt_strlen((char*)&default_PhoneNumber[0]);
-    sim900->CenterPhoneNumber = rt_malloc_align(len, RT_ALIGN_SIZE);
-    rt_strncpy((char*)sim900->CenterPhoneNumber, (char*)&default_PhoneNumber[0], len);
+    sim900_set_attribute(sim900->CenterPhoneNumber, &default_PhoneNumber[0]);
 
     /*set auto connection off*/
     sim900->tcpudp_autoconn = 0;
@@ -1168,12 +1219,12 @@ rt_err_t rt_sim900_init(void)
             if(rt_strncmp( (char*)(&CMDresp[0]), "OK", 2) == 0)
             {
                 rt_kprintf("ip head set on\r\n");
-                state = RT_EOK;
+                state = RT_EOK;     //success
             }
             else if(rt_strncmp( (char*)(&CMDresp[0]), "ERROR", 5) == 0)
             {
                 rt_kprintf("ip head set error\r\n");
-                return RT_ERROR;//failed
+                return RT_ERROR;    //failed
             }
         }
         //err = rt_mb_recv(sim900->ATMailBox, (rt_uint32_t*)&CMDresp[0],RT_TICK_PER_SECOND);//timeout
@@ -1217,7 +1268,6 @@ rt_size_t rt_sim900_write(const void* buffer, rt_size_t size)
 
 rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
 {
-    rt_uint8_t  len = 0;
     rt_err_t    err = RT_ERROR;
     rt_uint8_t  sim900_cmd = cmd;
     rt_uint32_t e = 0;
@@ -1226,10 +1276,16 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
 
     switch(sim900_cmd)
     {
+        case 0:    //bring up gsm gprs and ready for tcpudp conn
+            err = sim900_RegGSM();
+            err = sim900_AttachGPRS();
+            err = sim900_CIICR();
+            err = sim900_CIFSR();
+            break;
         case 1:    //DO_TCPUDP_CONN
             err = sim900_ConnStart(sim900->conn_type, sim900->remote_addr, sim900->remote_port);
             break;
-        case 2;    //TCPUDP_DISCONN:
+        case 2:    //TCPUDP_DISCONN:
             err = sim900_CIPCLOSE();
             break;
         case 3:    //TCPUDP_CLOSED:
@@ -1244,11 +1300,7 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
         case 5:     //TCPUDP_SET_CONN_TYPE:  TCP/UDP
             if(args != RT_NULL)
             {
-                if(sim900->conn_type != RT_NULL)
-                    rt_free_align((char*)sim900->conn_type);
-                len = rt_strlen((char*)args);
-                sim900->conn_type = rt_malloc_align(len, RT_ALIGN_SIZE);
-                rt_strncpy((char*)sim900->conn_type, (char*)args, len);
+                sim900_set_attribute(sim900->conn_type, (rt_uint8_t*)args);
                 err = RT_EOK;
             }
             else
@@ -1257,9 +1309,9 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
         case 6:     //TCPUDP_AUTO_CONN
             if(args != RT_NULL)
             {
-                rt_memset(&CMD(0), 0, sizeof(&CMD[0]));
+                rt_memset(&CMD[0], 0, sizeof(&CMD[0]));
                 rt_strncpy((char*)&CMD[0], (char*)args, rt_strlen((char*)args));
-                sim900->tcpudp_autoconn == CMD[0];
+                sim900->tcpudp_autoconn = CMD[0];
                 err = RT_EOK;
             }
             else
@@ -1268,11 +1320,7 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
         case 7:    //set TCPUDP_REMOTE_IP
             if(args != RT_NULL)
             {
-                if(sim900->remote_addr != RT_NULL)
-                    rt_free_align((char*)sim900->remote_addr);
-                len = rt_strlen((char*)args);
-                sim900->remote_addr = rt_malloc_align(len, RT_ALIGN_SIZE);
-                rt_strncpy((char*)sim900->remote_addr, (char*)args, len);
+                sim900_set_attribute(sim900->remote_addr, (rt_uint8_t*)args);
                 err = RT_EOK;
             }
             else
@@ -1281,18 +1329,20 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
         case 8:    //set TCPUDP_REMOTE_PORT
             if(args != RT_NULL)
             {
-                if(sim900->remote_port != RT_NULL)
-                    rt_free_align((char*)sim900->remote_port);
-                len = rt_strlen((char*)args);
-                sim900->remote_port = rt_malloc_align(len, RT_ALIGN_SIZE);
-                rt_strncpy((char*)sim900->remote_port, (char*)args, len);
+                sim900_set_attribute(sim900->remote_port, (rt_uint8_t*)args);
                 err = RT_EOK;
             }
             else
                 err = RT_ERROR;
             break;
+        case 9:    //QUERY_AUTO_CONN
+            if(args != RT_NULL)
+            {
+                rt_strncpy((char*)args, (char*)&sim900->tcpudp_autoconn, 1);
+            }
+            break;
         case 11:
-            rt_memset(&CMD(0), 0, sizeof(&CMD[0]));
+            rt_memset(&CMD[0], 0, sizeof(&CMD[0]));
             if(args != RT_NULL)
                 rt_strncpy((char*)&CMD[0], (char*)args, rt_strlen((char*)args));
             err = sim900_Call(&CMD[0]);//send dial call cmd
@@ -1323,7 +1373,6 @@ rt_err_t rt_sim900_control(rt_uint8_t cmd, void *args)
 
     return err;
 }
-
 /****************************************
 *   rt_sim900_rx_ind                    *
 *   hook func in usart isr              *
@@ -1390,7 +1439,7 @@ void IPDataBuff_init(void)
 *   1. allocate mem                     *
 *   2. init semaphore and msg queue     *
 ****************************************/
-rt_sim900_dev* rt_hw_sim900_init(const char* device_name)
+void rt_hw_sim900_init(const char* device_name)
 {
     /*init sim device mem*/
     if(sim900 == RT_NULL)
@@ -1419,7 +1468,6 @@ rt_sim900_dev* rt_hw_sim900_init(const char* device_name)
 
     //(2)set device
     rt_sim900_set_device(device_name);
-    return sim900;
 }
 
 

@@ -57,33 +57,33 @@ extern "C" {
 
 //sim900 AT cmd response event definition
 //MUST < 32
-#define OK          (1<<0)
-#define CONNECT     (1<<1)
-#define RING        (1<<2)  //  incoming call
-#define NO_CARRIER  (1<<3)
-#define ERROR       (1<<4)
-#define NO_DIALTONE (1<<5)
-#define BUSY        (1<<6)  //  call hanged up
-#define NO_ANSWER   (1<<7)
-#define READY       (1<<8)
-#define STATE       (1<<9)
-#define CLOSED      (1<<11)
-#define CLOSE_OK    (1<<12)
-#define CONNECT_OK  (1<<13)
-#define CONNECT_FAIL (1<<14)
-#define SEND_OK     (1<<15)
-#define SEND_FAIL   (1<<16)
-#define SHUT_OK     (1<<17)
-#define SERVER_OK   (1<<18)
+#define OK              (1<<0)
+#define CONNECT         (1<<1)
+#define RING            (1<<2)  //  incoming call
+#define NO_CARRIER      (1<<3)
+#define ERROR           (1<<4)
+#define NO_DIALTONE     (1<<5)
+#define BUSY            (1<<6)  //  call hanged up
+#define NO_ANSWER       (1<<7)
+#define READY           (1<<8)
+#define STATE           (1<<9)
+#define CLOSED          (1<<11)
+#define CLOSE_OK        (1<<12)
+#define CONNECT_OK      (1<<13)
+#define CONNECT_FAIL    (1<<14)
+#define SEND_OK         (1<<15)
+#define SEND_FAIL       (1<<16)
+#define SHUT_OK         (1<<17)
+#define SERVER_OK       (1<<18)
 #define ALREADY_CONNECT (1<<19)
-#define PROMOT_MARK (1<<20) //">"
-#define IPD         (1<<21) //ip data in
+#define PROMOT_MARK     (1<<20) //">"
+#define IPD             (1<<21) //ip data in
 
-#define DATA_ACCEPT (1<<27)
-#define DATA_SEND   (1<<28)
-#define CME_ERROR   (1<<29)
-#define SIG_OK      (1<<30)
-#define CALLDONE    (1<<31)
+#define DATA_ACCEPT     (1<<27)
+#define DATA_SEND       (1<<28)
+#define CME_ERROR       (1<<29)
+#define SIG_OK          (1<<30)
+#define CALLDONE        (1<<31)
 
 #define recv_ats        1
 #define recv_ipdata_len 2
@@ -126,7 +126,7 @@ typedef struct rt_sim900_device
     rt_uint8_t* type;               //device type[16]:SIMCOM_SIM900 etc
     rt_uint8_t* Rev;                //device revision[22]:1137B01V01SIM900M32_ST
     rt_uint8_t* sn;                 //serial number[16]:013227000201560 etc
-    rt_uint8_t* operator;           //celluar operator[16]:CHINA MOBILE etc
+    rt_uint8_t* operator;           //cellular operator[16]:CHINA MOBILE etc
 
 
     rt_sem_t    rx_semaphore;       //sem for sim900 get a char
