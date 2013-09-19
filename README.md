@@ -9,14 +9,14 @@ Traget CPU: STM32F103ZE;
 OS kernel version: RT-THREAD 1.0.2;
 
 
-Stage(1):(in progress, 2013/05/30-- )
+Stage(1):(in progress, 2013/05/30--2013/09/15 )
     basic functions for sim900 operation;
     COM read & write OPs;
     OS thread support;
     AT commands OPs;
     sim900 status check OPs;
     
-Stage(2):(TBD)
+Stage(2):(in progress, 2013/05/30--2013/09/15 )
     GSM: Call handler;
     GPRS: TCP/IP & UDP data handler;
 
